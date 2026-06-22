@@ -8,67 +8,127 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, BarChart, Bar, Cell
 } from "recharts";
 
-// Mapowanie technicznych nazw par na czytelne polskie opisy
+// Dane każdej pary: etykieta + co oznacza wynik dla zwykłego człowieka
 const CORRELATION_LABELS = {
-  "sleep_stress":    { label: "Sen ↔ Stres",      desc: "Czy więcej snu wiąże się z niższym stresem?" },
-  "sleep_quality":   { label: "Sen ↔ Jakość snu", desc: "Czy dłuższy sen oznacza lepszą jego jakość?" },
-  "sleep_activity":  { label: "Sen ↔ Aktywność",  desc: "Czy aktywność fizyczna wpływa na długość snu?" },
-  "stress_quality":  { label: "Stres ↔ Jakość snu",desc: "Czy wysoki stres pogarsza jakość snu?" },
-  "stress_activity": { label: "Stres ↔ Aktywność", desc: "Czy ćwiczenia redukują poziom stresu?" },
-  "quality_activity":{ label: "Jakość snu ↔ Aktywność", desc: "Czy aktywność fizyczna poprawia jakość snu?" },
+  "sleep_stress": {
+    label: "Sen ↔ Stres",
+    positive: "Im więcej śpisz, tym wyższy masz stres — to nieoczekiwany wynik. Może stres powoduje, że śpisz dłużej jako reakcja na zmęczenie?",
+    negative: "Im więcej śpisz, tym mniejszy stres odczuwasz — to zdrowy wzorzec. Dobry sen skutecznie obniża napięcie nerwowe.",
+    neutral:  "Nie widać wyraźnego związku między snem a stresem — mogą na siebie nie wpływać lub inne czynniki są ważniejsze.",
+  },
+  "sleep_quality": {
+    label: "Sen ↔ Jakość snu",
+    positive: "Dłuższy sen idzie w parze z lepszą jego jakością — typowy, zdrowy wzorzec.",
+    negative: "Paradoksalnie, im dłużej śpisz, tym gorzej oceniasz jakość snu — być może śpisz za długo lub masz zaburzenia snu.",
+    neutral:  "Długość snu nie przekłada się wyraźnie na jego jakość — liczy się raczej głębokość i regularność snu.",
+  },
+  "sleep_activity": {
+    label: "Sen ↔ Aktywność",
+    positive: "Więcej ruchu idzie w parze z dłuższym snem — aktywność fizyczna sprzyja lepszemu wypoczynkowi.",
+    negative: "Im więcej ćwiczysz, tym krócej śpisz — może ćwiczysz późno wieczorem lub masz napiętą aktywność zawodową?",
+    neutral:  "Aktywność fizyczna nie wpływa wyraźnie na długość snu — inne czynniki decydują o tym ile śpisz.",
+  },
+  "stress_quality": {
+    label: "Stres ↔ Jakość snu",
+    positive: "Wyższy stres towarzyszy lepszej jakości snu — to nieoczekiwane; sprawdź czy dane są poprawne.",
+    negative: "Wyższy stres wyraźnie pogarsza jakość snu — to typowy wzorzec. Redukcja stresu powinna poprawić wypoczynek.",
+    neutral:  "Stres nie wpływa wyraźnie na jakość snu w tych danych.",
+  },
+  "stress_activity": {
+    label: "Stres ↔ Aktywność",
+    positive: "Więcej aktywności wiąże się z wyższym stresem — możliwy przeciążony plan dnia lub intensywny tryb życia.",
+    negative: "Więcej ruchu fizycznego = niższy stres — ćwiczenia skutecznie redukują napięcie nerwowe.",
+    neutral:  "Aktywność fizyczna nie ma wyraźnego wpływu na poziom stresu w tych danych.",
+  },
+  "quality_activity": {
+    label: "Jakość snu ↔ Aktywność",
+    positive: "Lepsza jakość snu idzie w parze z większą aktywnością — dobrze wypoczęty organizm chętniej się rusza.",
+    negative: "Wyższa aktywność wiąże się z gorszą jakością snu — możliwe przemęczenie lub ćwiczenia zbyt późno.",
+    neutral:  "Jakość snu i aktywność fizyczna nie wpływają na siebie wyraźnie w tych danych.",
+  },
 };
 
 // Interpretacja słowna wartości korelacji Pearsona
 const interpretCorrelation = (val) => {
   const abs = Math.abs(val);
-  const dir = val >= 0 ? "dodatnia" : "ujemna";
-  if (abs >= 0.8) return { strength: "Bardzo silna", dir, color: val >= 0 ? "#22c55e" : "#ef4444", emoji: val >= 0 ? "💚" : "❤️" };
-  if (abs >= 0.6) return { strength: "Silna",        dir, color: val >= 0 ? "#4ade80" : "#f87171", emoji: val >= 0 ? "🟢" : "🔴" };
-  if (abs >= 0.4) return { strength: "Umiarkowana",  dir, color: val >= 0 ? "#facc15" : "#fb923c", emoji: val >= 0 ? "🟡" : "🟠" };
-  if (abs >= 0.2) return { strength: "Słaba",        dir, color: "#94a3b8", emoji: "⚪" };
-  return              { strength: "Brak / znikoma", dir, color: "#64748b", emoji: "➖" };
+  if (abs >= 0.8) return { color: val >= 0 ? "#22c55e" : "#ef4444" };
+  if (abs >= 0.6) return { color: val >= 0 ? "#4ade80" : "#f87171" };
+  if (abs >= 0.4) return { color: val >= 0 ? "#facc15" : "#fb923c" };
+  if (abs >= 0.2) return { color: "#94a3b8" };
+  return              { color: "#64748b" };
 };
 
-// Własny tooltip dla wykresu korelacji
+// Prosty tooltip — tylko nazwa i wartość
 const CustomCorrelationTooltip = ({ active, payload }) => {
   if (!active || !payload || !payload.length) return null;
   const { name, value } = payload[0].payload;
-  const meta = CORRELATION_LABELS[name] || { label: name, desc: "" };
-  const interp = interpretCorrelation(value);
-
+  const meta = CORRELATION_LABELS[name] || { label: name };
+  const { color } = interpretCorrelation(value);
   return (
     <div style={{
-      background: "rgba(15, 10, 40, 0.95)",
-      border: `1px solid ${interp.color}`,
-      borderRadius: "14px",
-      padding: "14px 18px",
+      background: "rgba(15,10,40,0.95)",
+      border: `1px solid ${color}`,
+      borderRadius: "10px",
+      padding: "10px 14px",
       color: "white",
-      maxWidth: "280px",
-      boxShadow: `0 8px 32px rgba(0,0,0,0.5), 0 0 12px ${interp.color}44`,
       fontSize: "13px",
-      lineHeight: "1.6",
     }}>
-      <div style={{ fontWeight: 700, fontSize: "15px", marginBottom: "6px" }}>
-        {meta.label}
-      </div>
-      <div style={{ color: "rgba(255,255,255,0.7)", marginBottom: "10px", fontStyle: "italic" }}>
-        {meta.desc}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-        <span style={{ fontSize: "20px" }}>{interp.emoji}</span>
-        <span style={{ color: interp.color, fontWeight: 700, fontSize: "15px" }}>
-          {interp.strength} ({interp.dir})
-        </span>
-      </div>
-      <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: "8px", padding: "8px 10px", marginBottom: "8px" }}>
-        <span style={{ color: "rgba(255,255,255,0.6)" }}>Wartość r = </span>
-        <span style={{ color: interp.color, fontWeight: 700 }}>{value.toFixed(4)}</span>
-      </div>
-      <div style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "8px" }}>
-        📐 Skala: <strong style={{color:"#22c55e"}}>+1</strong> = idealna korelacja dodatnia &nbsp;|&nbsp;
-        <strong style={{color:"#ef4444"}}>−1</strong> = idealna ujemna &nbsp;|&nbsp;
-        <strong style={{color:"#94a3b8"}}>0</strong> = brak zależności
-      </div>
+      <div style={{ fontWeight: 700, marginBottom: "4px" }}>{meta.label}</div>
+      <div>r = <strong style={{ color }}>{value.toFixed(4)}</strong></div>
+    </div>
+  );
+};
+
+// Karty interpretacji pod wykresem
+const CorrelationInsights = ({ corrData }) => {
+  if (!corrData || corrData.length === 0) return null;
+  return (
+    <div style={{ marginTop: "24px", display: "flex", flexDirection: "column", gap: "12px" }}>
+      <h4 style={{ color: "rgba(255,255,255,0.9)", margin: "0 0 4px 0", fontSize: "15px" }}>
+        💡 Co oznaczają te wyniki dla Ciebie?
+      </h4>
+      {corrData.map((entry) => {
+        const meta = CORRELATION_LABELS[entry.name];
+        if (!meta) return null;
+        const { color } = interpretCorrelation(entry.value);
+        const abs = Math.abs(entry.value);
+        let interpretation;
+        if (abs < 0.2)       interpretation = meta.neutral;
+        else if (entry.value >= 0) interpretation = meta.positive;
+        else                 interpretation = meta.negative;
+        const sign = entry.value >= 0 ? "+" : "";
+        return (
+          <div key={entry.name} style={{
+            background: "rgba(255,255,255,0.06)",
+            border: `1px solid ${color}55`,
+            borderLeft: `4px solid ${color}`,
+            borderRadius: "12px",
+            padding: "12px 16px",
+            display: "flex",
+            gap: "14px",
+            alignItems: "flex-start",
+          }}>
+            <div style={{
+              minWidth: "48px",
+              textAlign: "center",
+              fontWeight: 800,
+              fontSize: "18px",
+              color,
+              paddingTop: "2px",
+            }}>
+              {sign}{entry.value.toFixed(2)}
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, color: "white", marginBottom: "4px", fontSize: "14px" }}>
+                {meta.label}
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.72)", fontSize: "13px", lineHeight: "1.55" }}>
+                {interpretation}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -327,7 +387,10 @@ const ViewPage = () => {
                   <div className="correlations chart-box" style={{ maxWidth: "800px", margin: "20px auto" }}>
                     <h3>📊 Korelacje między zmiennymi</h3>
                     <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "13px", marginBottom: "16px", marginTop: "-4px" }}>
-                      Najedź kursorem na słupek, aby zobaczyć szczegółową interpretację. Wartości bliskie <strong style={{color:"#22c55e"}}>+1</strong> oznaczają silną zależność dodatnią, bliskie <strong style={{color:"#ef4444"}}>−1</strong> — silną ujemną, a bliskie <strong style={{color:"#94a3b8"}}>0</strong> — brak zależności.
+                      Wykres pokazuje jak mocno dwie zmienne są ze sobą powiązane.
+                      Słupek w prawo (<strong style={{color:"#22c55e"}}>+</strong>) = rosną razem,
+                      w lewo (<strong style={{color:"#ef4444"}}>−</strong>) = gdy jedna rośnie, druga maleje,
+                      blisko zera = brak wyraźnego związku.
                     </p>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart
@@ -359,6 +422,8 @@ const ViewPage = () => {
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
+
+                    <CorrelationInsights corrData={corrData} />
                   </div>
                 );
               })()}
